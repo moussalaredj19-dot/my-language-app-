@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install --legacy-peer-deps
-      - run: npx vite build --base=/my-language-app/
+      - run: npm run build -- --base=./
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
