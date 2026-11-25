@@ -13,7 +13,8 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - run: npm install
+      - run: npm install --legacy-peer-deps
+      - run: npm install @capacitor/android --legacy-peer-deps
       - run: npm run build
       - run: npx cap add android
       - run: npx cap sync android
@@ -22,4 +23,3 @@ jobs:
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
