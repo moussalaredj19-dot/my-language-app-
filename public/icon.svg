@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="spaceBg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#0a2540" />
+      <stop offset="65%" stop-color="#040b18" />
+      <stop offset="100%" stop-color="#02040a" />
+    </radialGradient>
+    <radialGradient id="earthGrad" cx="38%" cy="35%" r="68%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="45%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#082f49" />
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#spaceBg)" />
+  <circle cx="96" cy="112" r="4" fill="#ffffff" opacity="0.9" />
+  <circle cx="410" cy="96" r="5" fill="#bae6fd" opacity="0.85" />
+  <circle cx="430" cy="390" r="4" fill="#a7f3d0" opacity="0.85" />
+  <circle cx="88" cy="396" r="3.5" fill="#fef3c7" opacity="0.8" />
+  <ellipse cx="256" cy="256" rx="176" ry="68" transform="rotate(-22 256 256)" fill="none" stroke="url(#ringGrad)" stroke-width="10" opacity="0.7" />
+  <circle cx="256" cy="256" r="126" fill="url(#earthGrad)" stroke="#34d399" stroke-width="6" />
+  <path d="M196 198c24-12 58-6 70 16 10 18-12 36-4 54 6 14 32 10 42 26 8 14-8 42-28 48-26 8-54-12-74-36-22-26-26-96-6-108z" fill="#34d399" opacity="0.92" />
+  <path d="M294 176c26 4 50 24 54 50 4 24-18 40-34 32-18-8-26-34-26-54 0-12 2-24 6-28z" fill="#10b981" opacity="0.9" />
+  <ellipse cx="256" cy="256" rx="176" ry="68" transform="rotate(-22 256 256)" fill="none" stroke="url(#ringGrad)" stroke-width="10" stroke-dasharray="280 420" stroke-dashoffset="-110" />
+</svg>

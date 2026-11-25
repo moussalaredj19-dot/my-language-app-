@@ -1,0 +1,473 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidLookupId(id) {
+      return id is string && id.size() >= 6 && id.size() <= 128 && id.matches('^(code_[A-Z0-9\\-]+|email_[a-f0-9]{64})$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isParentOwner(userId) {
+      return isOwner(userId)
+        && exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+    }
+
+    function isValidAvatarId(data) {
+      return !('avatarId' in data) || (data.avatarId is string && data.avatarId.size() >= 1 && data.avatarId.size() <= 32);
+    }
+
+    function isValidArabicCountryCode(data) {
+      return !('arabicCountryCode' in data) || (data.arabicCountryCode is string && data.arabicCountryCode.size() >= 2 && data.arabicCountryCode.size() <= 4);
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'email', 'nativeLanguage', 'targetLanguage',
+          'level', 'levelLabel', 'purpose', 'purposeFocus', 'learningStyle',
+          'dailyGoalMinutes', 'xp', 'streakDays', 'completedLessonsCount',
+          'completedExercisesCount', 'weeklyXp', 'weeklyTargetXp',
+          'onboardingCompleted', 'theme', 'soundEnabled', 'speechRate',
+          'notificationsEnabled', 'reminderTime',
+          'skillReading', 'skillWriting', 'skillSpeaking', 'skillListening', 'skillVocabulary',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'nativeLanguage', 'targetLanguage',
+          'level', 'levelLabel', 'purpose', 'purposeFocus', 'learningStyle',
+          'dailyGoalMinutes', 'xp', 'streakDays', 'completedLessonsCount',
+          'completedExercisesCount', 'weeklyXp', 'weeklyTargetXp',
+          'onboardingCompleted', 'theme', 'soundEnabled', 'speechRate',
+          'notificationsEnabled', 'reminderTime',
+          'skillReading', 'skillWriting', 'skillSpeaking', 'skillListening', 'skillVocabulary',
+          'avatarId', 'arabicCountryCode',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.email is string && data.email.size() <= 120
+        && data.nativeLanguage is string && data.nativeLanguage.size() >= 2 && data.nativeLanguage.size() <= 40
+        && data.targetLanguage is string && data.targetLanguage.size() >= 2 && data.targetLanguage.size() <= 40
+        && data.level is int && data.level >= 1 && data.level <= 5
+        && data.levelLabel is string && data.levelLabel.size() >= 2 && data.levelLabel.size() <= 50
+        && data.purpose is string && data.purpose.size() >= 2 && data.purpose.size() <= 80
+        && data.purposeFocus is string && data.purposeFocus.size() <= 160
+        && data.learningStyle is string && data.learningStyle.size() <= 80
+        && data.dailyGoalMinutes is int && data.dailyGoalMinutes >= 5 && data.dailyGoalMinutes <= 180
+        && data.xp is int && data.xp >= 0 && data.xp <= 10000000
+        && data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 36500
+        && data.completedLessonsCount is int && data.completedLessonsCount >= 0 && data.completedLessonsCount <= 10000
+        && data.completedExercisesCount is int && data.completedExercisesCount >= 0 && data.completedExercisesCount <= 100000
+        && data.weeklyXp is int && data.weeklyXp >= 0 && data.weeklyXp <= 100000
+        && data.weeklyTargetXp is int && data.weeklyTargetXp >= 50 && data.weeklyTargetXp <= 50000
+        && data.onboardingCompleted is bool
+        && data.theme is string && (data.theme == 'light' || data.theme == 'dark')
+        && data.soundEnabled is bool
+        && data.speechRate is number && data.speechRate >= 0.5 && data.speechRate <= 1.6
+        && data.notificationsEnabled is bool
+        && data.reminderTime is string && data.reminderTime.size() >= 4 && data.reminderTime.size() <= 10
+        && data.skillReading is int && data.skillReading >= 0 && data.skillReading <= 100
+        && data.skillWriting is int && data.skillWriting >= 0 && data.skillWriting <= 100
+        && data.skillSpeaking is int && data.skillSpeaking >= 0 && data.skillSpeaking <= 100
+        && data.skillListening is int && data.skillListening >= 0 && data.skillListening <= 100
+        && data.skillVocabulary is int && data.skillVocabulary >= 0 && data.skillVocabulary <= 100
+        && isValidAvatarId(data)
+        && isValidArabicCountryCode(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'friendCode', 'nativeLanguage', 'targetLanguage',
+          'level', 'levelLabel', 'xp', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'friendCode', 'nativeLanguage', 'targetLanguage',
+          'level', 'levelLabel', 'xp', 'avatarId', 'arabicCountryCode', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.friendCode is string && data.friendCode.size() >= 4 && data.friendCode.size() <= 20 && data.friendCode.matches('^[A-Z0-9\\-]+$')
+        && data.nativeLanguage is string && data.nativeLanguage.size() >= 2 && data.nativeLanguage.size() <= 40
+        && data.targetLanguage is string && data.targetLanguage.size() >= 2 && data.targetLanguage.size() <= 40
+        && data.level is int && data.level >= 1 && data.level <= 5
+        && data.levelLabel is string && data.levelLabel.size() >= 2 && data.levelLabel.size() <= 50
+        && data.xp is int && data.xp >= 0 && data.xp <= 10000000
+        && isValidAvatarId(data)
+        && isValidArabicCountryCode(data)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendLookup(data) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'friendCode', 'targetLanguage', 'level', 'levelLabel', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'friendCode', 'targetLanguage', 'level', 'levelLabel', 'avatarId', 'arabicCountryCode', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == request.auth.uid && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.friendCode is string && data.friendCode.size() >= 4 && data.friendCode.size() <= 20 && data.friendCode.matches('^[A-Z0-9\\-]+$')
+        && data.targetLanguage is string && data.targetLanguage.size() >= 2 && data.targetLanguage.size() <= 40
+        && data.level is int && data.level >= 1 && data.level <= 5
+        && data.levelLabel is string && data.levelLabel.size() >= 2 && data.levelLabel.size() <= 50
+        && isValidAvatarId(data)
+        && isValidArabicCountryCode(data)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendRecord(data, userId, friendUid) {
+      return data.keys().hasAll([
+          'userId', 'friendUid', 'friendCode', 'displayName', 'targetLanguage',
+          'level', 'levelLabel', 'chatId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'friendUid', 'friendCode', 'displayName', 'targetLanguage',
+          'level', 'levelLabel', 'chatId', 'avatarId', 'arabicCountryCode', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.friendUid is string && data.friendUid == friendUid && data.friendUid != userId && isValidId(data.friendUid)
+        && data.friendCode is string && data.friendCode.size() >= 4 && data.friendCode.size() <= 20 && data.friendCode.matches('^[A-Z0-9\\-]+$')
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.targetLanguage is string && data.targetLanguage.size() >= 2 && data.targetLanguage.size() <= 40
+        && data.level is int && data.level >= 1 && data.level <= 5
+        && data.levelLabel is string && data.levelLabel.size() >= 2 && data.levelLabel.size() <= 50
+        && data.chatId is string && data.chatId.size() >= 3 && data.chatId.size() <= 128 && isValidId(data.chatId)
+        && isValidAvatarId(data)
+        && isValidArabicCountryCode(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendChat(data, chatId) {
+      return data.keys().hasAll([
+          'chatId', 'uidA', 'uidB', 'nameA', 'nameB', 'langA', 'langB',
+          'lastMessage', 'lastSenderId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'chatId', 'uidA', 'uidB', 'nameA', 'nameB', 'langA', 'langB',
+          'lastMessage', 'lastSenderId', 'createdAt', 'updatedAt'
+        ])
+        && data.chatId is string && data.chatId == chatId && isValidId(data.chatId)
+        && data.uidA is string && isValidId(data.uidA)
+        && data.uidB is string && isValidId(data.uidB)
+        && data.uidA != data.uidB
+        && (data.uidA + '_' + data.uidB) == chatId
+        && data.nameA is string && data.nameA.size() >= 1 && data.nameA.size() <= 80
+        && data.nameB is string && data.nameB.size() >= 1 && data.nameB.size() <= 80
+        && data.langA is string && data.langA.size() >= 2 && data.langA.size() <= 40
+        && data.langB is string && data.langB.size() >= 2 && data.langB.size() <= 40
+        && data.lastMessage is string && data.lastMessage.size() <= 500
+        && data.lastSenderId is string && data.lastSenderId.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendChatMessage(data, chatId) {
+      return data.keys().hasAll([
+          'chatId', 'uidA', 'uidB', 'senderId', 'senderName', 'text', 'language', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'chatId', 'uidA', 'uidB', 'senderId', 'senderName', 'text', 'language', 'createdAt'
+        ])
+        && data.chatId is string && data.chatId == chatId && isValidId(data.chatId)
+        && data.uidA is string && isValidId(data.uidA)
+        && data.uidB is string && isValidId(data.uidB)
+        && data.uidA != data.uidB
+        && (data.uidA + '_' + data.uidB) == chatId
+        && data.senderId is string && data.senderId == request.auth.uid
+        && (data.senderId == data.uidA || data.senderId == data.uidB)
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.language is string && data.language.size() >= 2 && data.language.size() <= 40
+        && data.createdAt is timestamp;
+    }
+
+    function isValidLessonProgress(data, userId, lessonId) {
+      return data.keys().hasAll(['userId', 'lessonId', 'language', 'level', 'title', 'status', 'score', 'xpEarned', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'lessonId', 'language', 'level', 'title', 'status', 'score', 'xpEarned', 'createdAt', 'updatedAt'])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.lessonId is string && data.lessonId == lessonId && isValidId(data.lessonId)
+        && data.language is string && data.language.size() >= 2 && data.language.size() <= 40
+        && data.level is int && data.level >= 1 && data.level <= 5
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.status is string && (data.status == 'in_progress' || data.status == 'completed')
+        && data.score is int && data.score >= 0 && data.score <= 100
+        && data.xpEarned is int && data.xpEarned >= 0 && data.xpEarned <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVocabularyCard(data, userId) {
+      return data.keys().hasAll(['userId', 'word', 'translation', 'pronunciation', 'example', 'language', 'mastery', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'word', 'translation', 'pronunciation', 'example', 'language', 'mastery', 'createdAt', 'updatedAt'])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.word is string && data.word.size() >= 1 && data.word.size() <= 120
+        && data.translation is string && data.translation.size() >= 1 && data.translation.size() <= 120
+        && data.pronunciation is string && data.pronunciation.size() <= 120
+        && data.example is string && data.example.size() <= 300
+        && data.language is string && data.language.size() >= 2 && data.language.size() <= 40
+        && data.mastery is int && data.mastery >= 0 && data.mastery <= 5
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data, userId) {
+      return data.keys().hasAll(['userId', 'title', 'body', 'category', 'read', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'title', 'body', 'category', 'read', 'createdAt', 'updatedAt'])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 300
+        && data.category is string && (data.category == 'reminder' || data.category == 'challenge' || data.category == 'achievement' || data.category == 'lesson')
+        && data.read is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWeeklyChallenge(data, userId) {
+      return data.keys().hasAll(['userId', 'title', 'targetTasks', 'completedTasks', 'xpReward', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'title', 'targetTasks', 'completedTasks', 'xpReward', 'status', 'createdAt', 'updatedAt'])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.targetTasks is int && data.targetTasks >= 1 && data.targetTasks <= 50
+        && data.completedTasks is int && data.completedTasks >= 0 && data.completedTasks <= data.targetTasks
+        && data.xpReward is int && data.xpReward >= 10 && data.xpReward <= 5000
+        && data.status is string && (data.status == 'active' || data.status == 'completed')
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if isValidId(userId) && isSignedIn();
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().friendCode == existing().friendCode
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /friendLookup/{lookupId} {
+      allow get: if isValidLookupId(lookupId) && isSignedIn();
+      allow list: if false;
+      allow create: if isValidLookupId(lookupId)
+        && isSignedIn()
+        && isValidFriendLookup(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isValidLookupId(lookupId)
+        && isSignedIn()
+        && isValidFriendLookup(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().friendCode == existing().friendCode
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidLookupId(lookupId)
+        && isSignedIn()
+        && existing().uid == request.auth.uid;
+    }
+
+    match /friendChats/{chatId} {
+      allow get: if isValidId(chatId)
+        && isSignedIn()
+        && (chatId.matches('^' + request.auth.uid + '_[a-zA-Z0-9_\\-]+$') || chatId.matches('^[a-zA-Z0-9_\\-]+_' + request.auth.uid + '$'))
+        && (resource == null || resource.data.uidA == request.auth.uid || resource.data.uidB == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.uidA == request.auth.uid || resource.data.uidB == request.auth.uid);
+      allow create: if isValidId(chatId)
+        && isSignedIn()
+        && isValidFriendChat(incoming(), chatId)
+        && (incoming().uidA == request.auth.uid || incoming().uidB == request.auth.uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/publicProfiles/$(incoming().uidA))
+        && exists(/databases/$(database)/documents/publicProfiles/$(incoming().uidB));
+      allow update: if isValidId(chatId)
+        && isSignedIn()
+        && isValidFriendChat(incoming(), chatId)
+        && (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid)
+        && incoming().chatId == existing().chatId
+        && incoming().uidA == existing().uidA
+        && incoming().uidB == existing().uidB
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['nameA', 'nameB', 'langA', 'langB', 'lastMessage', 'lastSenderId', 'updatedAt']);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isValidId(chatId) && isValidId(messageId)
+          && isSignedIn()
+          && (resource.data.uidA == request.auth.uid || resource.data.uidB == request.auth.uid);
+        allow list: if isSignedIn()
+          && (resource.data.uidA == request.auth.uid || resource.data.uidB == request.auth.uid);
+        allow create: if isValidId(chatId) && isValidId(messageId)
+          && isSignedIn()
+          && isValidFriendChatMessage(incoming(), chatId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/friendChats/$(chatId))
+          && get(/databases/$(database)/documents/friendChats/$(chatId)).data.uidA == incoming().uidA
+          && get(/databases/$(database)/documents/friendChats/$(chatId)).data.uidB == incoming().uidB;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'nativeLanguage', 'targetLanguage', 'level', 'levelLabel',
+            'purpose', 'purposeFocus', 'learningStyle', 'dailyGoalMinutes',
+            'onboardingCompleted', 'avatarId', 'arabicCountryCode', 'updatedAt'
+          ]) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'xp', 'streakDays', 'completedLessonsCount', 'completedExercisesCount',
+            'weeklyXp', 'skillReading', 'skillWriting', 'skillSpeaking',
+            'skillListening', 'skillVocabulary', 'updatedAt'
+          ]) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'theme', 'soundEnabled', 'speechRate', 'notificationsEnabled',
+            'reminderTime', 'dailyGoalMinutes', 'weeklyTargetXp', 'arabicCountryCode', 'updatedAt'
+          ])
+        );
+      allow delete: if false;
+
+      match /friends/{friendUid} {
+        allow get: if isValidId(userId) && isValidId(friendUid) && isParentOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(friendUid)
+          && isParentOwner(userId)
+          && isValidFriendRecord(incoming(), userId, friendUid)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/publicProfiles/$(friendUid));
+        allow update: if isValidId(userId) && isValidId(friendUid)
+          && isParentOwner(userId)
+          && isValidFriendRecord(incoming(), userId, friendUid)
+          && incoming().userId == existing().userId
+          && incoming().friendUid == existing().friendUid
+          && incoming().friendCode == existing().friendCode
+          && incoming().chatId == existing().chatId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'targetLanguage', 'level', 'levelLabel', 'avatarId', 'arabicCountryCode', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(friendUid) && isParentOwner(userId);
+      }
+
+      match /lessonProgress/{lessonId} {
+        allow get: if isValidId(userId) && isValidId(lessonId) && isParentOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(lessonId)
+          && isParentOwner(userId)
+          && isValidLessonProgress(incoming(), userId, lessonId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(lessonId)
+          && isParentOwner(userId)
+          && isValidLessonProgress(incoming(), userId, lessonId)
+          && incoming().userId == existing().userId
+          && incoming().lessonId == existing().lessonId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'score', 'xpEarned', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /vocabulary/{wordId} {
+        allow get: if isValidId(userId) && isValidId(wordId) && isParentOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(wordId)
+          && isParentOwner(userId)
+          && isValidVocabularyCard(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(wordId)
+          && isParentOwner(userId)
+          && isValidVocabularyCard(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['mastery', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(wordId) && isParentOwner(userId);
+      }
+
+      match /notifications/{notifId} {
+        allow get: if isValidId(userId) && isValidId(notifId) && isParentOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(notifId)
+          && isParentOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(notifId)
+          && isParentOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(notifId) && isParentOwner(userId);
+      }
+
+      match /weeklyChallenges/{challengeId} {
+        allow get: if isValidId(userId) && isValidId(challengeId) && isParentOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(challengeId)
+          && isParentOwner(userId)
+          && isValidWeeklyChallenge(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(challengeId)
+          && isParentOwner(userId)
+          && existing().status != 'completed'
+          && isValidWeeklyChallenge(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['completedTasks', 'status', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private learner profile, language configuration, onboarding answers, and aggregate learning metrics.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "email": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "nativeLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "targetLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "level": { "type": "integer" },
+        "levelLabel": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "purpose": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "purposeFocus": { "type": "string", "minLength": 0, "maxLength": 160 },
+        "learningStyle": { "type": "string", "minLength": 0, "maxLength": 80 },
+        "dailyGoalMinutes": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "streakDays": { "type": "integer" },
+        "completedLessonsCount": { "type": "integer" },
+        "completedExercisesCount": { "type": "integer" },
+        "weeklyXp": { "type": "integer" },
+        "weeklyTargetXp": { "type": "integer" },
+        "onboardingCompleted": { "type": "boolean" },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "soundEnabled": { "type": "boolean" },
+        "speechRate": { "type": "number" },
+        "notificationsEnabled": { "type": "boolean" },
+        "reminderTime": { "type": "string", "minLength": 4, "maxLength": 10 },
+        "skillReading": { "type": "integer" },
+        "skillWriting": { "type": "integer" },
+        "skillSpeaking": { "type": "integer" },
+        "skillListening": { "type": "integer" },
+        "skillVocabulary": { "type": "integer" },
+        "avatarId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "arabicCountryCode": { "type": "string", "minLength": 2, "maxLength": 8 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "nativeLanguage",
+        "targetLanguage",
+        "level",
+        "levelLabel",
+        "purpose",
+        "purposeFocus",
+        "learningStyle",
+        "dailyGoalMinutes",
+        "xp",
+        "streakDays",
+        "completedLessonsCount",
+        "completedExercisesCount",
+        "weeklyXp",
+        "weeklyTargetXp",
+        "onboardingCompleted",
+        "theme",
+        "soundEnabled",
+        "speechRate",
+        "notificationsEnabled",
+        "reminderTime",
+        "skillReading",
+        "skillWriting",
+        "skillSpeaking",
+        "skillListening",
+        "skillVocabulary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "PII-free learner card shared with friends using friendCode and target language.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "friendCode": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "nativeLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "targetLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "level": { "type": "integer" },
+        "levelLabel": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "xp": { "type": "integer" },
+        "avatarId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "friendCode", "nativeLanguage", "targetLanguage", "level", "levelLabel", "xp", "updatedAt"]
+    },
+    "FriendLookup": {
+      "title": "FriendLookup",
+      "description": "Exact-key directory entry keyed by friendCode or hashed email for adding friends without exposing PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "friendCode": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "targetLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "level": { "type": "integer" },
+        "levelLabel": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "avatarId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "friendCode", "targetLanguage", "level", "levelLabel", "updatedAt"]
+    },
+    "FriendRecord": {
+      "title": "FriendRecord",
+      "description": "Saved friend connection inside a learner's private friend list.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "friendUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "friendCode": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "targetLanguage": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "level": { "type": "integer" },
+        "levelLabel": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "chatId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "friendUid", "friendCode", "displayName", "targetLanguage", "level", "levelLabel", "chatId", "createdAt", "updatedAt"]
+    },
+    "FriendChatThread": {
+      "title": "FriendChatThread",
+      "description": "Two-party language practice chat thread between friends.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uidA": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uidB": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nameA": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "nameB": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "langA": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "langB": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "lastMessage": { "type": "string", "minLength": 0, "maxLength": 500 },
+        "lastSenderId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "uidA", "uidB", "nameA", "nameB", "langA", "langB", "lastMessage", "lastSenderId", "createdAt", "updatedAt"]
+    },
+    "FriendChatMessage": {
+      "title": "FriendChatMessage",
+      "description": "Individual chat message sent between two friends in a practice thread.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uidA": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uidB": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "language": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "uidA", "uidB", "senderId", "senderName", "text", "language", "createdAt"]
+    },
+    "LessonProgress": {
+      "title": "LessonProgress",
+      "description": "Tracks completion status and scores for a user's sequential stages.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lessonId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "language": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "level": { "type": "integer" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["in_progress", "completed"] },
+        "score": { "type": "integer" },
+        "xpEarned": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "lessonId", "language", "level", "title", "status", "score", "xpEarned", "createdAt", "updatedAt"]
+    },
+    "VocabularyCard": {
+      "title": "VocabularyCard",
+      "description": "Personal flashcard word saved by the learner.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "word": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "translation": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "pronunciation": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "example": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "language": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "mastery": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "word", "translation", "pronunciation", "example", "language", "mastery", "createdAt", "updatedAt"]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "Learner notification item.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "category": { "type": "string", "enum": ["reminder", "challenge", "achievement", "lesson"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "body", "category", "read", "createdAt", "updatedAt"]
+    },
+    "WeeklyChallengeProgress": {
+      "title": "WeeklyChallengeProgress",
+      "description": "Weekly challenge mission state for the learner.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "targetTasks": { "type": "integer" },
+        "completedTasks": { "type": "integer" },
+        "xpReward": { "type": "integer" },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "targetTasks", "completedTasks", "xpReward", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user learning profile and preferences."
+    },
+    "/publicProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "PII-free public learner cards for friend profiles."
+    },
+    "/friendLookup/{lookupId}": {
+      "schema": { "$ref": "#/entities/FriendLookup" },
+      "description": "Exact-key directory lookup by friendCode or hashed email."
+    },
+    "/users/{userId}/friends/{friendUid}": {
+      "schema": { "$ref": "#/entities/FriendRecord" },
+      "description": "Learner's added friends directory."
+    },
+    "/friendChats/{chatId}": {
+      "schema": { "$ref": "#/entities/FriendChatThread" },
+      "description": "Two-party language chat threads between friends."
+    },
+    "/friendChats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/FriendChatMessage" },
+      "description": "Real-time chat messages between two friends."
+    },
+    "/users/{userId}/lessonProgress/{lessonId}": {
+      "schema": { "$ref": "#/entities/LessonProgress" },
+      "description": "Per-stage completion and score tracking."
+    },
+    "/users/{userId}/vocabulary/{wordId}": {
+      "schema": { "$ref": "#/entities/VocabularyCard" },
+      "description": "Learner's saved vocabulary flashcards."
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/UserNotification" },
+      "description": "Learner notifications and alerts."
+    },
+    "/users/{userId}/weeklyChallenges/{challengeId}": {
+      "schema": { "$ref": "#/entities/WeeklyChallengeProgress" },
+      "description": "Weekly challenge tasks and rewards."
+    }
+  }
+}

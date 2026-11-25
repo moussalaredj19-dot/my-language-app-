@@ -1,0 +1,10 @@
+{
+  "name": "My Language",
+  "description": "تطبيق احترافي متكامل لتعلم جميع لغات العالم بمستويات مخصصة، دروس تفاعلية، تمارين كتابية وشفهية، قراءة صوتية، ومحادثة ذكية.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
