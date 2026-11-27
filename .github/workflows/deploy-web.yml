@@ -22,8 +22,11 @@ jobs:
           node-version: 20
       - run: npm install --legacy-peer-deps
       - run: npm run build -- --base=./
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
       - id: deployment
         uses: actions/deploy-pages@v4
+        
