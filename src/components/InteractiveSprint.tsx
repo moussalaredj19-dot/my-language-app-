@@ -10,6 +10,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getStarterInteractiveSprint } from '../data/curriculum';
+import { generateInteractiveSprint } from '../lib/gemini';
 import { playFeedbackSound } from '../lib/sound';
 import { speakText } from '../lib/speech';
 import { InteractiveSprintStep, UserProfile } from '../types';
@@ -60,18 +61,12 @@ export default function InteractiveSprint({
     setGenerating(true);
     setGenError(null);
     try {
-      const res = await fetch('/api/ai/interactive-sprint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nativeLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-          level: profile.level,
-          purpose: profile.purpose,
-        }),
+      const data = await generateInteractiveSprint({
+        nativeLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
+        level: profile.level,
+        purpose: profile.purpose,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر توليد الجولة التفاعلية.');
       if (Array.isArray(data.steps) && data.steps.length > 0) {
         resetWithSteps(data.steps);
         playFeedbackSound('success', profile.soundEnabled);

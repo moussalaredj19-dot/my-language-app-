@@ -35,6 +35,7 @@ import {
   lookupFriendByQuery,
   makeChatId,
 } from '../../lib/friends';
+import { sendCoachChatTurn } from '../../lib/gemini';
 import { playFeedbackSound } from '../../lib/sound';
 import { createSpeechRecognizer, speakText, SpeechRecognitionLike } from '../../lib/speech';
 import {
@@ -478,21 +479,15 @@ export default function ChatView({ profile, onPracticeTurn }: ChatViewProps) {
     setSendingCoach(true);
 
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nativeLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-          level: profile.level,
-          purpose: profile.purpose,
-          scenario,
-          history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
-          message: trimmed,
-        }),
+      const data = await sendCoachChatTurn({
+        nativeLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
+        level: profile.level,
+        purpose: profile.purpose,
+        scenario,
+        history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
+        message: trimmed,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر إرسال الرسالة.');
 
       const tutorMsg: CoachMessage = {
         id: `t-${Date.now()}`,

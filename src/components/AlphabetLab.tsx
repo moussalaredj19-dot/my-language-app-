@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getOppositePronunciation, getStarterAlphabet } from '../data/alphabets';
+import { generateLanguageAlphabet } from '../lib/gemini';
 import { playFeedbackSound } from '../lib/sound';
 import { speakText } from '../lib/speech';
 import { AlphabetLetter, LanguageAlphabet, UserProfile } from '../types';
@@ -47,16 +48,10 @@ export default function AlphabetLab({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/ai/alphabet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nativeLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-        }),
+      const data = await generateLanguageAlphabet({
+        nativeLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر تحميل حروف اللغة.');
       setAlphabet(data);
       setSelectedIdx(0);
       setQuizIdx(0);

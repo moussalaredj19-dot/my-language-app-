@@ -24,6 +24,7 @@ import InteractiveSprint from '../InteractiveSprint';
 import TalkingAvatar from '../TalkingAvatar';
 import { getStagesForLevel, getStarterContent } from '../../data/curriculum';
 import { getLanguageByName, PROFICIENCY_LEVELS } from '../../data/languages';
+import { evaluateWritingAnswer, generateExercisesPack } from '../../lib/gemini';
 import { playFeedbackSound } from '../../lib/sound';
 import {
   computeWordSimilarity,
@@ -192,18 +193,12 @@ export default function ExercisesView({
     setGenerating(true);
     setGenError(null);
     try {
-      const res = await fetch('/api/ai/exercises', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nativeLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-          level: profile.level,
-          purpose: profile.purpose,
-        }),
+      const data = await generateExercisesPack({
+        nativeLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
+        level: profile.level,
+        purpose: profile.purpose,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر توليد التمارين.');
       setPack(data);
       resetExerciseStates();
       playFeedbackSound('success', profile.soundEnabled);
@@ -308,20 +303,14 @@ export default function ExercisesView({
     setEvaluatingWrite(true);
     setGenError(null);
     try {
-      const res = await fetch('/api/ai/evaluate-writing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nativeLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-          level: profile.level,
-          promptText: activeWriting.prompt,
-          expectedAnswer: activeWriting.expected,
-          userAnswer: writeInput.trim(),
-        }),
+      const data = await evaluateWritingAnswer({
+        nativeLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
+        level: profile.level,
+        promptText: activeWriting.prompt,
+        expectedAnswer: activeWriting.expected,
+        userAnswer: writeInput.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر التقييم.');
       setWriteEval(data);
       if (data.isCorrect || data.score >= 70) {
         playFeedbackSound('success', profile.soundEnabled);

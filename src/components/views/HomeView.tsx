@@ -17,6 +17,7 @@ import { MainTab, UserProfile } from '../../types';
 import { speakText } from '../../lib/speech';
 import { getLanguageByName } from '../../data/languages';
 import { getOppositePronunciation, getStarterAlphabet } from '../../data/alphabets';
+import { translateQuickPhrase } from '../../lib/gemini';
 import LanguageFlag from '../LanguageFlag';
 import UserAvatar from '../UserAvatar';
 
@@ -50,17 +51,11 @@ export default function HomeView({ profile, unreadNotifications, onNavigate }: H
     setTranslating(true);
     setTranslateErr(null);
     try {
-      const res = await fetch('/api/ai/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: quickText.trim(),
-          sourceLanguage: profile.nativeLanguage,
-          targetLanguage: profile.targetLanguage,
-        }),
+      const data = await translateQuickPhrase({
+        text: quickText.trim(),
+        sourceLanguage: profile.nativeLanguage,
+        targetLanguage: profile.targetLanguage,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر الترجمة حالياً.');
       setTranslateResult(data);
     } catch (err) {
       setTranslateErr(err instanceof Error ? err.message : 'تعذر الترجمة حالياً.');
