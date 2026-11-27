@@ -35,6 +35,11 @@
         "skillVocabulary": { "type": "integer" },
         "avatarId": { "type": "string", "minLength": 1, "maxLength": 32 },
         "arabicCountryCode": { "type": "string", "minLength": 2, "maxLength": 8 },
+        "energy": { "type": "integer" },
+        "maxEnergy": { "type": "integer" },
+        "gems": { "type": "integer" },
+        "lastEnergyDate": { "type": "string", "minLength": 8, "maxLength": 12 },
+        "subscriptionTier": { "type": "string", "enum": ["free", "plus_monthly", "plus_yearly"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

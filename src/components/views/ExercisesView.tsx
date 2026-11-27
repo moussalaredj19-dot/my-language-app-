@@ -4,6 +4,8 @@ import {
   BookOpen,
   Check,
   CheckCircle2,
+  Crown,
+  Gem,
   Languages,
   Link2,
   Loader2,
@@ -43,6 +45,15 @@ import {
 interface ExercisesViewProps {
   profile: UserProfile;
   completedStages: Record<string, LessonProgressRecord>;
+  hasEnergy: boolean;
+  energy: number;
+  maxEnergy: number;
+  gems: number;
+  isPlus: boolean;
+  resettingStages: boolean;
+  onConsumeEnergy: (amount?: number) => Promise<boolean>;
+  onOpenRecharge: () => void;
+  onResetStages: (scopedStageIds: string[]) => Promise<void>;
   onCompleteStage: (stage: StageDefinition, scopedStageId: string) => Promise<void>;
   onExerciseCompleted: (
     skill: 'writing' | 'speaking' | 'reading' | 'listening' | 'vocabulary',
@@ -74,6 +85,15 @@ export function makeScopedStageId(targetLanguage: string, stageId: string): stri
 export default function ExercisesView({
   profile,
   completedStages,
+  hasEnergy,
+  energy,
+  maxEnergy,
+  gems,
+  isPlus,
+  resettingStages,
+  onConsumeEnergy,
+  onOpenRecharge,
+  onResetStages,
   onCompleteStage,
   onExerciseCompleted,
 }: ExercisesViewProps) {
@@ -119,6 +139,7 @@ export default function ExercisesView({
   const [isRecordingSpeak, setIsRecordingSpeak] = useState(false);
   const [spokenText, setSpokenText] = useState('');
   const [speakScore, setSpeakScore] = useState<number | null>(null);
+  const [speakVerdict, setSpeakVerdict] = useState<'idle' | 'correct' | 'wrong'>('idle');
   const [micError, setMicError] = useState<string | null>(null);
   const recognizerRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -180,6 +201,8 @@ export default function ExercisesView({
     setSpeakIdx(0);
     setSpokenText('');
     setSpeakScore(null);
+    setSpeakVerdict('idle');
+    setMicError(null);
     setBlankIdx(0);
     setSelectedBlankOpt(null);
     setMatchedTargets({});
@@ -228,6 +251,10 @@ export default function ExercisesView({
 
   const handleSelectStage = (idx: number) => {
     if (idx > highestUnlockedIdx) return;
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     const st = stages[idx];
     if (!st) return;
     setActiveStageIdx(idx);
@@ -239,8 +266,22 @@ export default function ExercisesView({
     playFeedbackSound('tap', profile.soundEnabled);
   };
 
+  const handleRestartAllStages = async () => {
+    const scopedIds = stages.map((s) => makeScopedStageId(profile.targetLanguage, s.id));
+    await onResetStages(scopedIds);
+    setActiveStageIdx(0);
+    setMode(stages[0]?.mode || 'sprint');
+    setWritingSubMode(stages[0]?.writingSubMode || (profile.level <= 2 ? 'words' : 'sentences'));
+    setStagePracticed(false);
+    resetExerciseStates();
+  };
+
   const handleFinishActiveStage = async () => {
     if (!activeStage || completingStage) return;
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     setCompletingStage(true);
     try {
       await onCompleteStage(activeStage, activeScopedId);
@@ -283,6 +324,10 @@ export default function ExercisesView({
   const handleCheckWordWrite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeWordItem || !wordWriteInput.trim()) return;
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     const cleanUser = wordWriteInput.trim().toLowerCase().replace(/[.,!?؟،]/g, '');
     const cleanTarget = activeWordItem.word.trim().toLowerCase().replace(/[.,!?؟،]/g, '');
     if (cleanUser === cleanTarget) {
@@ -293,6 +338,7 @@ export default function ExercisesView({
     } else {
       setWordWriteStatus('wrong');
       playFeedbackSound('error', profile.soundEnabled);
+      void onConsumeEnergy(1);
     }
   };
 
@@ -300,6 +346,10 @@ export default function ExercisesView({
   const handleCheckWriting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!writeInput.trim() || !activeWriting) return;
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     setEvaluatingWrite(true);
     setGenError(null);
     try {
@@ -317,6 +367,7 @@ export default function ExercisesView({
         await recordExerciseSuccess('writing', 25);
       } else {
         playFeedbackSound('error', profile.soundEnabled);
+        void onConsumeEnergy(1);
       }
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'تعذر تقييم الكتابة.');
@@ -332,13 +383,18 @@ export default function ExercisesView({
       transcript: string,
       result: { score: number; matchedWords: string[]; missedWords: string[] }
     ) => void,
-    setRecording: (b: boolean) => void
+    setRecording: (b: boolean) => void,
+    kind: 'speaking' | 'reading'
   ) => {
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     setMicError(null);
     const rec = createSpeechRecognizer(profile.targetLanguage);
     if (!rec) {
       setMicError(
-        'متصفحك لا يدعم التعرف الصوتي التلقائي. استمع للنطق النموذجي من الأفاتار ثم سجّل إتمام التدريب.'
+        'متصفحك لا يدعم التعرف الصوتي التلقائي. استمع للنطق النموذجي من المدرب ثم اختر تقييم نطقك.'
       );
       return;
     }
@@ -364,8 +420,13 @@ export default function ExercisesView({
       if (latestTranscript) {
         const similarity = computeWordSimilarity(expectedPhrase, latestTranscript);
         if (similarity.score >= 60) {
+          if (kind === 'speaking') setSpeakVerdict('correct');
           playFeedbackSound('success', profile.soundEnabled);
-          void recordExerciseSuccess('speaking', 25);
+          void recordExerciseSuccess(kind, 25);
+        } else {
+          if (kind === 'speaking') setSpeakVerdict('wrong');
+          playFeedbackSound('error', profile.soundEnabled);
+          void onConsumeEnergy(1);
         }
       }
     };
@@ -381,17 +442,26 @@ export default function ExercisesView({
 
   const activeBlank = (pack.fillBlanks || [])[blankIdx] || (pack.fillBlanks || [])[0];
   const handleSelectBlank = async (opt: string) => {
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     setSelectedBlankOpt(opt);
     if (opt === activeBlank?.correct) {
       playFeedbackSound('success', profile.soundEnabled);
       await recordExerciseSuccess('vocabulary', 15);
     } else {
       playFeedbackSound('error', profile.soundEnabled);
+      void onConsumeEnergy(1);
     }
   };
 
   const handleTapNativeMatch = async (nativeWord: string) => {
     if (!selectedLeft) return;
+    if (!hasEnergy) {
+      onOpenRecharge();
+      return;
+    }
     const pair = pack.matching.find((p) => p.target === selectedLeft);
     if (pair && pair.native === nativeWord) {
       const next = { ...matchedTargets, [selectedLeft]: true };
@@ -404,6 +474,7 @@ export default function ExercisesView({
     } else {
       setWrongFlash(true);
       playFeedbackSound('error', profile.soundEnabled);
+      void onConsumeEnergy(1);
       setTimeout(() => setWrongFlash(false), 450);
     }
   };
@@ -460,8 +531,8 @@ export default function ExercisesView({
 
   return (
     <div className="space-y-6">
-      {/* Top Bar */}
-      <div className="bg-gradient-to-l from-violet-600/10 via-white to-emerald-600/10 dark:from-violet-950/30 dark:via-slate-900 dark:to-emerald-950/30 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Bar with Energy, Gems, and Generate Pack */}
+      <div className="bg-gradient-to-l from-violet-600/10 via-white to-emerald-600/10 dark:from-violet-950/30 dark:via-slate-900 dark:to-emerald-950/30 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">
             مسار المراحل والتمارين — {profile.targetLanguage}
@@ -470,20 +541,75 @@ export default function ExercisesView({
             المستوى {profile.level} ({profile.levelLabel}) · {levelMeta?.curriculumFocus}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleGeneratePack()}
-          disabled={generating}
-          className="min-h-[44px] px-4 rounded-xl border-b-4 border-emerald-800 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 whitespace-nowrap shrink-0 active:translate-y-0.5"
-        >
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-          <span>{generating ? 'جاري التوليد...' : 'توليد حزمة تمارين جديدة'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onOpenRecharge}
+            className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 cursor-pointer transition-colors ${
+              isPlus
+                ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                : !hasEnergy
+                ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200'
+                : 'border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100'
+            }`}
+          >
+            {isPlus ? (
+              <>
+                <Crown className="w-4 h-4 text-amber-500" />
+                <span>بلس ∞ طاقة</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span className="font-mono-num">الطاقة: {energy}/{maxEnergy}</span>
+              </>
+            )}
+            <span className="flex items-center gap-1 text-sky-600 dark:text-sky-300 border-r border-slate-200 dark:border-slate-700 pr-2 mr-0.5 font-mono-num">
+              <Gem className="w-3.5 h-3.5" />
+              <span>{gems}</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleGeneratePack()}
+            disabled={generating}
+            className="min-h-[44px] px-4 rounded-xl border-b-4 border-emerald-800 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 whitespace-nowrap shrink-0 active:translate-y-0.5"
+          >
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            <span>{generating ? 'جاري التوليد...' : 'توليد حزمة تمارين جديدة'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Sequential Stage Path (Step-by-Step Progression, Zero Brand Mentions) */}
+      {/* Out of Energy Alert */}
+      {!hasEnergy && (
+        <div
+          role="alert"
+          className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-300 dark:border-rose-900 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="space-y-0.5">
+            <div className="text-sm font-extrabold text-rose-800 dark:text-rose-200 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-rose-600" />
+              <span>نفدت طاقتك اليومية!</span>
+            </div>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              يمكنك شحن طاقتك فوراً باستخدام الجواهر أو عبر الاشتراك في باقة بلس، أو الانتظار حتى الغد للتجديد التلقائي.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenRecharge}
+            className="min-h-[42px] px-4 rounded-xl border-b-4 border-rose-800 bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shrink-0"
+          >
+            شحن الطاقة والاشتراك
+          </button>
+        </div>
+      )}
+
+      {/* Sequential Stage Path (Step-by-Step Progression) */}
       <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
               <Trophy className="w-5 h-5 text-amber-500" />
@@ -497,13 +623,31 @@ export default function ExercisesView({
             </p>
           </div>
 
-          <div className="w-36 h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-l from-emerald-500 to-teal-400 transition-all duration-300"
-              style={{
-                width: `${Math.max(6, Math.round((completedInCurrentLevel / Math.max(1, stages.length)) * 100))}%`,
-              }}
-            />
+          <div className="flex flex-wrap items-center gap-3">
+            {completedInCurrentLevel > 0 && (
+              <button
+                type="button"
+                disabled={resettingStages}
+                onClick={() => void handleRestartAllStages()}
+                className="min-h-[38px] px-3.5 rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer hover:brightness-95 disabled:opacity-60"
+              >
+                {resettingStages ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                <span>إعادة التمارين من جديد</span>
+              </button>
+            )}
+
+            <div className="w-32 h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-l from-emerald-500 to-teal-400 transition-all duration-300"
+                style={{
+                  width: `${Math.max(6, Math.round((completedInCurrentLevel / Math.max(1, stages.length)) * 100))}%`,
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -577,6 +721,30 @@ export default function ExercisesView({
             );
           })}
         </div>
+
+        {/* All Stages Completed Celebration & Restart Action */}
+        {stages.length > 0 && completedInCurrentLevel >= stages.length && (
+          <div className="rounded-2xl bg-gradient-to-l from-amber-50 via-emerald-50 to-sky-50 dark:from-amber-950/35 dark:via-emerald-950/35 dark:to-sky-950/35 border-2 border-emerald-400/70 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="text-sm font-extrabold text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" />
+                <span>أحسنت! أنهيت جميع تمارين ومراحل المستوى {profile.level}!</span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                يمكنك الآن إعادة التمارين من المرحلة الأولى للتدرب أكثر أو توليد حزمة أسئلة جديدة.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={resettingStages}
+              onClick={() => void handleRestartAllStages()}
+              className="min-h-[44px] px-5 rounded-xl border-b-4 border-amber-700 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shrink-0 cursor-pointer active:translate-y-0.5 disabled:opacity-60"
+            >
+              {resettingStages ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              <span>إعادة التمارين من جديد</span>
+            </button>
+          </div>
+        )}
 
         {/* Active Stage Completion Bar */}
         {activeStage && (
@@ -661,6 +829,9 @@ export default function ExercisesView({
       {mode === 'alphabet' && (
         <AlphabetLab
           profile={profile}
+          hasEnergy={hasEnergy}
+          onConsumeEnergy={onConsumeEnergy}
+          onOpenRecharge={onOpenRecharge}
           onPracticeSuccess={async (xp) => {
             await recordExerciseSuccess('reading', xp);
           }}
@@ -672,6 +843,9 @@ export default function ExercisesView({
         <InteractiveSprint
           profile={profile}
           stageTitle={activeStage?.title}
+          hasEnergy={hasEnergy}
+          onConsumeEnergy={onConsumeEnergy}
+          onOpenRecharge={onOpenRecharge}
           onCompleteSprint={async (xpEarned) => {
             await recordExerciseSuccess('vocabulary', xpEarned);
           }}
@@ -712,7 +886,19 @@ export default function ExercisesView({
                 <span className="text-xs font-mono-num font-bold text-violet-600 dark:text-violet-400">
                   كلمة {wordWriteIdx + 1} / {pack.wordWriting.length} — المستوى {profile.level}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWordWriteIdx(0);
+                      setWordWriteInput('');
+                      setWordWriteStatus('idle');
+                    }}
+                    className="min-h-[34px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>إعادة</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setHideWordModel((v) => !v)}
@@ -880,11 +1066,24 @@ export default function ExercisesView({
 
           {(writingSubMode === 'sentences' || !activeWordItem) && activeWriting && (
             <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-mono-num font-bold text-emerald-600 dark:text-emerald-400">
                   تمرين كتابة الجمل {writeIdx + 1} / {pack.writing.length}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWriteIdx(0);
+                      setWriteInput('');
+                      setWriteEval(null);
+                    }}
+                    className="min-h-[32px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>إعادة</span>
+                  </button>
+                  <div className="flex gap-2">
                   {pack.writing.map((_, idx) => (
                     <button
                       key={idx}
@@ -903,6 +1102,7 @@ export default function ExercisesView({
                       {idx + 1}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
 
@@ -972,44 +1172,83 @@ export default function ExercisesView({
         </div>
       )}
 
-      {/* 2. SPEAKING WITH TALKING AVATAR */}
+      {/* 2. SPEAKING WITH TALKING AVATAR & PRONUNCIATION COACH */}
       {mode === 'speaking' && activeSpeaking && (
         <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-mono-num font-bold text-emerald-600 dark:text-emerald-400">
               تمرين الرسالة الصوتية والنطق {speakIdx + 1} / {pack.speaking.length}
             </span>
-            <div className="flex gap-2">
-              {pack.speaking.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSpeakIdx(idx);
-                    setSpokenText('');
-                    setSpeakScore(null);
-                  }}
-                  className={`w-8 h-8 rounded-lg text-xs font-mono-num font-bold cursor-pointer ${
-                    speakIdx === idx
-                      ? 'bg-[#081B3E] text-white dark:bg-emerald-600'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSpeakIdx(0);
+                  setSpokenText('');
+                  setSpeakScore(null);
+                  setSpeakVerdict('idle');
+                  setMicError(null);
+                }}
+                className="min-h-[32px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>إعادة</span>
+              </button>
+              <div className="flex gap-1.5">
+                {pack.speaking.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setSpeakIdx(idx);
+                      setSpokenText('');
+                      setSpeakScore(null);
+                      setSpeakVerdict('idle');
+                      setMicError(null);
+                    }}
+                    className={`w-8 h-8 rounded-lg text-xs font-mono-num font-bold cursor-pointer ${
+                      speakIdx === idx
+                        ? 'bg-[#081B3E] text-white dark:bg-emerald-600'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-sky-50/70 dark:bg-sky-950/25 border border-sky-200 dark:border-sky-900/60 p-4 sm:p-5">
+          <div
+            className={`rounded-2xl border p-4 sm:p-5 transition-colors ${
+              speakVerdict === 'correct'
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/35 border-emerald-300 dark:border-emerald-800'
+                : speakVerdict === 'wrong'
+                ? 'bg-amber-50/80 dark:bg-amber-950/35 border-amber-300 dark:border-amber-800'
+                : 'bg-sky-50/70 dark:bg-sky-950/25 border-sky-200 dark:border-sky-900/60'
+            }`}
+          >
             <TalkingAvatar
               text={activeSpeaking.phrase}
               languageName={profile.targetLanguage}
               speechRate={profile.speechRate}
               size="lg"
               variant="emerald"
+              mood={
+                speakVerdict === 'correct'
+                  ? 'celebrate'
+                  : speakVerdict === 'wrong'
+                  ? 'encourage'
+                  : 'neutral'
+              }
               label="مدربك الصوتي الناطق"
-              subtitle="استمع جيداً لحركة النطق ثم كرر العبارة بصوتك"
+              subtitle={
+                speakVerdict === 'correct'
+                  ? `أحسنت يا ${profile.displayName}! نطقك صحيح وواضح — تابع للجملة التالية.`
+                  : speakVerdict === 'wrong'
+                  ? 'نطقك يحتاج تحسيناً بسيطاً! استمع للنطق البطيء من المدرب ثم أعد المحاولة.'
+                  : 'استمع لي أولاً، ثم اضغط "انطق الجملة الآن" وسأخبرك إن كان نطقك صحيحاً أم خطأ.'
+              }
               showControls
             />
           </div>
@@ -1033,13 +1272,16 @@ export default function ExercisesView({
                 if (isRecordingSpeak) {
                   stopSpeechRecognition();
                 } else {
+                  setSpeakVerdict('idle');
                   startSpeechRecognition(
                     activeSpeaking.phrase,
                     (transcript, sim) => {
                       setSpokenText(transcript);
                       setSpeakScore(sim.score);
+                      setSpeakVerdict(sim.score >= 60 ? 'correct' : 'wrong');
                     },
-                    setIsRecordingSpeak
+                    setIsRecordingSpeak,
+                    'speaking'
                   );
                 }
               }}
@@ -1055,25 +1297,78 @@ export default function ExercisesView({
           </div>
 
           {micError && (
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3.5 text-xs text-amber-800 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2">
               <span>{micError}</span>
-              <button
-                type="button"
-                onClick={() => void recordExerciseSuccess('speaking', 20)}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold whitespace-nowrap cursor-pointer"
-              >
-                تدربتُ صوتياً (+20 XP)
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpeakVerdict('correct');
+                    setSpokenText(activeSpeaking.phrase);
+                    setSpeakScore(95);
+                    playFeedbackSound('success', profile.soundEnabled);
+                    void recordExerciseSuccess('speaking', 20);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold whitespace-nowrap cursor-pointer"
+                >
+                  نطقتها بشكل صحيح (+20 XP)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpeakVerdict('wrong');
+                    speakText(activeSpeaking.phrase, profile.targetLanguage, 0.65);
+                    void onConsumeEnergy(1);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold whitespace-nowrap cursor-pointer"
+                >
+                  أحتاج سماعها ببطء
+                </button>
+              </div>
             </div>
           )}
 
           {spokenText && speakScore !== null && (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-1.5 text-center">
-              <div className="text-xs text-slate-500">ما سمعه التطبيق:</div>
-              <div className="text-base font-bold text-slate-900 dark:text-white">{spokenText}</div>
-              <div className="text-sm font-bold font-mono-num text-emerald-600 dark:text-emerald-400">
-                دقة التطابق: {speakScore}%
+            <div
+              className={`rounded-2xl border p-4 space-y-2 text-center ${
+                speakScore >= 60
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2 font-extrabold text-sm">
+                {speakScore >= 60 ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span className="text-emerald-800 dark:text-emerald-200">
+                      نطقك صحيح! أحسنت (+25 XP)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-5 h-5 text-rose-600" />
+                    <span className="text-rose-800 dark:text-rose-200">
+                      نطقك خطأ أو غير واضح — حاول مرة أخرى
+                    </span>
+                  </>
+                )}
               </div>
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                ما سمعه المدرب: <span className="font-bold">{spokenText}</span>
+              </div>
+              <div className="text-sm font-bold font-mono-num text-emerald-700 dark:text-emerald-300">
+                دقة النطق: {speakScore}%
+              </div>
+              {speakScore < 60 && (
+                <button
+                  type="button"
+                  onClick={() => speakText(activeSpeaking.phrase, profile.targetLanguage, 0.65)}
+                  className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-bold cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>اسمع النطق الصحيح ببطء</span>
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -1082,28 +1377,41 @@ export default function ExercisesView({
       {/* 3. FILL IN THE BLANKS */}
       {mode === 'fillBlank' && activeBlank && (
         <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-mono-num font-bold text-emerald-600 dark:text-emerald-400">
               ملئ الفراغات {blankIdx + 1} / {pack.fillBlanks.length}
             </span>
-            <div className="flex gap-2">
-              {pack.fillBlanks.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setBlankIdx(idx);
-                    setSelectedBlankOpt(null);
-                  }}
-                  className={`w-8 h-8 rounded-lg text-xs font-mono-num font-bold cursor-pointer ${
-                    blankIdx === idx
-                      ? 'bg-[#081B3E] text-white dark:bg-emerald-600'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setBlankIdx(0);
+                  setSelectedBlankOpt(null);
+                }}
+                className="min-h-[32px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>إعادة</span>
+              </button>
+              <div className="flex gap-2">
+                {pack.fillBlanks.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setBlankIdx(idx);
+                      setSelectedBlankOpt(null);
+                    }}
+                    className={`w-8 h-8 rounded-lg text-xs font-mono-num font-bold cursor-pointer ${
+                      blankIdx === idx
+                        ? 'bg-[#081B3E] text-white dark:bg-emerald-600'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1159,9 +1467,22 @@ export default function ExercisesView({
                 اختر كلمة من العمود الأول ثم اضغط على ترجمتها في العمود الثاني.
               </p>
             </div>
-            <span className="font-mono-num text-sm font-bold text-emerald-600 dark:text-emerald-400">
-              {Object.keys(matchedTargets).length} / {pack.matching.length}
-            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setMatchedTargets({});
+                  setSelectedLeft(null);
+                }}
+                className="min-h-[32px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>إعادة</span>
+              </button>
+              <span className="font-mono-num text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                {Object.keys(matchedTargets).length} / {pack.matching.length}
+              </span>
+            </div>
           </div>
 
           <div className={`grid grid-cols-2 gap-4 transition-transform ${wrongFlash ? 'translate-x-1' : ''}`}>
@@ -1266,8 +1587,21 @@ export default function ExercisesView({
               speechRate={profile.speechRate}
               size="md"
               variant="sky"
+              mood={
+                readingShadowResult
+                  ? readingShadowResult.score >= 60
+                    ? 'celebrate'
+                    : 'encourage'
+                  : 'neutral'
+              }
               label="راوي الفقرة الصوتية"
-              subtitle="اضغط للاستماع إلى قراءة الفقرة كاملة"
+              subtitle={
+                readingShadowResult
+                  ? readingShadowResult.score >= 60
+                    ? 'قراءة ممتازة وطلاقة واضحة!'
+                    : 'استمع مرة أخرى ببطء وركز على الكلمات المظللة.'
+                  : 'اضغط للاستماع إلى قراءة الفقرة كاملة ثم اقرأها بصوتك'
+              }
               showControls
             />
           </div>
@@ -1290,7 +1624,7 @@ export default function ExercisesView({
                   إعادة قراءة الفقرة بالوسيلة الصوتية
                 </div>
                 <div className="text-xs text-slate-600 dark:text-slate-400">
-                  اضغط لبدء القراءة بصوت مسموع وسيقارن التطبيق نطقك مع كلمات الفقرة.
+                  اضغط لبدء القراءة بصوت مسموع وسيقارن المدرب نطقك مع كلمات الفقرة.
                 </div>
               </div>
               <button
@@ -1305,7 +1639,8 @@ export default function ExercisesView({
                         setReadingSpoken(transcript);
                         setReadingShadowResult(sim);
                       },
-                      setIsRecordingReading
+                      setIsRecordingReading,
+                      'reading'
                     );
                   }
                 }}
@@ -1323,7 +1658,9 @@ export default function ExercisesView({
             {readingSpoken && readingShadowResult && (
               <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">النص المسجل:</span>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {readingShadowResult.score >= 60 ? 'قراءة صحيحة!' : 'تحتاج إعادة لبعض الكلمات'}
+                  </span>
                   <span className="font-mono-num text-sm font-bold text-emerald-600">
                     نسبة الإتقان: {readingShadowResult.score}%
                   </span>
@@ -1360,12 +1697,17 @@ export default function ExercisesView({
                     key={opt}
                     type="button"
                     onClick={() => {
+                      if (!hasEnergy) {
+                        onOpenRecharge();
+                        return;
+                      }
                       setReadingAnswerIdx(idx);
                       if (isRight) {
                         playFeedbackSound('success', profile.soundEnabled);
                         void recordExerciseSuccess('reading', 25);
                       } else {
                         playFeedbackSound('error', profile.soundEnabled);
+                        void onConsumeEnergy(1);
                       }
                     }}
                     className={`w-full min-h-[46px] px-4 rounded-xl border text-right text-sm font-semibold transition-colors cursor-pointer ${cls}`}

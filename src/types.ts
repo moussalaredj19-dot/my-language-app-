@@ -103,6 +103,11 @@ export interface UserProfile {
   skillVocabulary: number;
   avatarId?: string;
   arabicCountryCode?: string;
+  energy?: number;
+  maxEnergy?: number;
+  gems?: number;
+  lastEnergyDate?: string;
+  subscriptionTier?: 'free' | 'plus_monthly' | 'plus_yearly';
   createdAt?: unknown;
   updatedAt?: unknown;
 }

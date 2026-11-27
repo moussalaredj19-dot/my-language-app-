@@ -6,6 +6,7 @@ import {
   HelpCircle,
   Keyboard,
   Loader2,
+  RotateCcw,
   Sparkles,
   Volume2,
   XCircle,
@@ -20,6 +21,9 @@ import TalkingAvatar from './TalkingAvatar';
 interface AlphabetLabProps {
   profile: UserProfile;
   onPracticeSuccess: (xp: number) => Promise<void>;
+  hasEnergy?: boolean;
+  onConsumeEnergy?: (amount?: number) => Promise<boolean>;
+  onOpenRecharge?: () => void;
   compact?: boolean;
 }
 
@@ -28,6 +32,9 @@ type DrillType = 'chart' | 'quizPron' | 'writeOpposite' | 'listenPick';
 export default function AlphabetLab({
   profile,
   onPracticeSuccess,
+  hasEnergy = true,
+  onConsumeEnergy,
+  onOpenRecharge,
   compact = false,
 }: AlphabetLabProps) {
   const [alphabet, setAlphabet] = useState<LanguageAlphabet | null>(() =>
@@ -105,6 +112,10 @@ export default function AlphabetLab({
   const handleCheckOppositeWrite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quizLetter || !writeOppositeInput.trim()) return;
+    if (!hasEnergy) {
+      onOpenRecharge?.();
+      return;
+    }
     const expected = getOppositePronunciation(quizLetter, profile.nativeLanguage).toLowerCase();
     const candidates = expected
       .split(/[/،,()\s]+/)
@@ -125,7 +136,18 @@ export default function AlphabetLab({
     } else {
       setWriteOppositeFeedback('wrong');
       playFeedbackSound('error', profile.soundEnabled);
+      void onConsumeEnergy?.(1);
     }
+  };
+
+  const handleResetAlphabet = () => {
+    setMasteredLetters({});
+    setSelectedIdx(0);
+    setQuizIdx(0);
+    setPickedOpt(null);
+    setWriteOppositeInput('');
+    setWriteOppositeFeedback('idle');
+    playFeedbackSound('tap', profile.soundEnabled);
   };
 
   const nextQuizItem = () => {
@@ -183,8 +205,21 @@ export default function AlphabetLab({
             {alphabet.description}
           </p>
         </div>
-        <div className="text-xs font-mono-num font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
-          {Object.keys(masteredLetters).length} / {letters.length} حرف متقن
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs font-mono-num font-bold text-emerald-700 dark:text-emerald-300">
+            {Object.keys(masteredLetters).length} / {letters.length} حرف متقن
+          </div>
+          {!compact && (
+            <button
+              type="button"
+              onClick={handleResetAlphabet}
+              className="min-h-[34px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-emerald-500 flex items-center gap-1.5 cursor-pointer"
+              title="إعادة الحروف من البداية"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>إعادة الحروف</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -339,6 +374,13 @@ export default function AlphabetLab({
                 speechRate={Math.max(0.75, profile.speechRate - 0.1)}
                 size="sm"
                 variant="sky"
+                mood={
+                  writeOppositeFeedback === 'correct'
+                    ? 'celebrate'
+                    : writeOppositeFeedback === 'wrong'
+                    ? 'encourage'
+                    : 'neutral'
+                }
                 label=""
               />
               <div className="w-24 h-24 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-400 dark:border-emerald-600 flex items-center justify-center text-4xl font-extrabold text-slate-900 dark:text-white shadow-sm" dir="ltr">
@@ -429,6 +471,16 @@ export default function AlphabetLab({
                 speechRate={Math.max(0.75, profile.speechRate - 0.1)}
                 size="md"
                 variant="sky"
+                mood={
+                  pickedOpt
+                    ? pickedOpt ===
+                      (drill === 'listenPick'
+                        ? quizLetter.letter
+                        : getOppositePronunciation(quizLetter, profile.nativeLanguage))
+                      ? 'celebrate'
+                      : 'encourage'
+                    : 'neutral'
+                }
                 label=""
               />
               {drill === 'quizPron' && (
@@ -473,6 +525,10 @@ export default function AlphabetLab({
                   type="button"
                   disabled={Boolean(pickedOpt)}
                   onClick={async () => {
+                    if (!hasEnergy) {
+                      onOpenRecharge?.();
+                      return;
+                    }
                     setPickedOpt(opt);
                     if (isRight) {
                       setMasteredLetters((prev) => ({ ...prev, [quizLetter.letter]: true }));
@@ -480,6 +536,7 @@ export default function AlphabetLab({
                       await onPracticeSuccess(15);
                     } else {
                       playFeedbackSound('error', profile.soundEnabled);
+                      void onConsumeEnergy?.(1);
                     }
                   }}
                   className={`min-h-[60px] rounded-2xl border-2 border-b-4 font-extrabold text-lg cursor-pointer transition-all ${cls}`}

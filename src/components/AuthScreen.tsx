@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
+import AppLogo from './AppLogo';
 import SpaceBackdrop from './SpaceBackdrop';
 
 interface AuthScreenProps {
@@ -107,9 +108,7 @@ export default function AuthScreen({ onBack, onAuthenticated }: AuthScreenProps)
         >
           <ArrowRight className="w-5 h-5" />
         </button>
-        <span dir="ltr" className="font-display text-lg font-extrabold text-emerald-400">
-          My Language
-        </span>
+        <AppLogo size="sm" showText darkBackground />
         <div className="w-11" aria-hidden="true" />
       </header>
 

@@ -12,6 +12,7 @@ import {
   Trophy,
   User,
   Volume2,
+  Zap,
 } from 'lucide-react';
 import { MainTab, UserProfile } from '../../types';
 import { speakText } from '../../lib/speech';
@@ -19,15 +20,22 @@ import { getLanguageByName } from '../../data/languages';
 import { getOppositePronunciation, getStarterAlphabet } from '../../data/alphabets';
 import { translateQuickPhrase } from '../../lib/gemini';
 import LanguageFlag from '../LanguageFlag';
+import TalkingAvatar from '../TalkingAvatar';
 import UserAvatar from '../UserAvatar';
 
 interface HomeViewProps {
   profile: UserProfile;
   unreadNotifications: number;
   onNavigate: (tab: MainTab) => void;
+  onOpenRecharge?: () => void;
 }
 
-export default function HomeView({ profile, unreadNotifications, onNavigate }: HomeViewProps) {
+export default function HomeView({
+  profile,
+  unreadNotifications,
+  onNavigate,
+  onOpenRecharge,
+}: HomeViewProps) {
   const [quickText, setQuickText] = useState('');
   const [translating, setTranslating] = useState(false);
   const [translateResult, setTranslateResult] = useState<{
@@ -232,6 +240,54 @@ export default function HomeView({ profile, unreadNotifications, onNavigate }: H
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Guided Avatar Daily Reminder & Encouragement Card */}
+      <section className="bg-white dark:bg-slate-900 border-2 border-emerald-200 dark:border-emerald-900/70 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex-1 min-w-0">
+          <TalkingAvatar
+            text={
+              spotlightLetter?.exampleWord
+                ? `${spotlightLetter.exampleWord}`
+                : langMeta.nativeName
+            }
+            languageName={profile.targetLanguage}
+            speechRate={profile.speechRate}
+            size="md"
+            variant="emerald"
+            mood="celebrate"
+            label={`تذكير وتشجيع يومي من مدربك في ${profile.targetLanguage}`}
+            subtitle={
+              profile.streakDays > 0
+                ? `رائع يا ${profile.displayName}! حافظت على سلسلة ${profile.streakDays} أيام — تدرب ${profile.dailyGoalMinutes} دقيقة اليوم ولا تفوّت مراحلك.`
+                : `أهلاً ${profile.displayName}! خصص ${profile.dailyGoalMinutes} دقيقة الآن لتدريب النطق وفتح المرحلة التالية.`
+            }
+            showControls
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => onNavigate('exercises')}
+            className="min-h-[44px] px-4 rounded-xl border-b-4 border-emerald-800 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold cursor-pointer active:translate-y-0.5"
+          >
+            ابدأ التدريب مع المدرب
+          </button>
+          {onOpenRecharge && (
+            <button
+              type="button"
+              onClick={onOpenRecharge}
+              className="min-h-[44px] px-3.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-amber-500" />
+              <span>
+                {(profile.subscriptionTier || 'free') !== 'free'
+                  ? 'طاقة ∞ بلس'
+                  : `الطاقة: ${profile.energy ?? 5}/${profile.maxEnergy ?? 5}`}
+              </span>
+            </button>
+          )}
         </div>
       </section>
 

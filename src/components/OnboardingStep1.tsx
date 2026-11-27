@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Camera, Check, Clock, Sparkles, User } from 'lucide-react';
 import { AVATAR_PRESETS, compressImageFileToAvatar } from '../data/avatars';
 import { playFeedbackSound } from '../lib/sound';
+import AppLogo from './AppLogo';
 import SpaceBackdrop from './SpaceBackdrop';
 import UserAvatar from './UserAvatar';
 
@@ -95,7 +96,7 @@ export default function OnboardingStep1({ initialData, onBack, onNext }: Onboard
           <span aria-hidden="true">·</span>
           <span className="text-emerald-400">بيانات المتعلم</span>
         </div>
-        <div className="w-11" aria-hidden="true" />
+        <AppLogo size="xs" />
       </header>
 
       {/* Progress Track */}

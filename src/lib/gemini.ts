@@ -1,5 +1,13 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import {
+  buildLocalAlphabet,
+  buildLocalCoachReply,
+  buildLocalExercisesPack,
+  buildLocalInteractiveSprint,
+  evaluateWritingLocally,
+  translateLocallyFromCurriculum,
+} from './localFallback';
+import {
   ExercisePack,
   InteractiveSprintStep,
   LanguageAlphabet,
@@ -7,13 +15,17 @@ import {
 
 const GEMINI_MODEL = 'gemini-4-hydrogen';
 
-function getAiClient(): GoogleGenAI {
+function getConfiguredApiKey(): string | null {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   if (!apiKey || apiKey === 'MY_VITE_GEMINI_API_KEY' || apiKey === 'MY_GEMINI_API_KEY') {
-    throw new Error(
-      'مفتاح VITE_GEMINI_API_KEY غير مهيأ. يرجى إضافته في ملف .env أو إعدادات البيئة ثم إعادة المحاولة.'
-    );
+    return null;
   }
+  return apiKey;
+}
+
+function getAiClient(): GoogleGenAI | null {
+  const apiKey = getConfiguredApiKey();
+  if (!apiKey) return null;
   return new GoogleGenAI({ apiKey });
 }
 
@@ -35,10 +47,10 @@ function getLevelDescription(level: number): string {
 
 function formatGeminiError(err: unknown, fallback: string): Error {
   const raw = err instanceof Error ? err.message : String(err ?? '');
-  if (raw.includes('VITE_GEMINI_API_KEY')) {
-    return new Error(raw);
-  }
   const lower = raw.toLowerCase();
+  if (raw.includes('Unexpected token') || lower.includes('<!doctype') || lower.includes('<html')) {
+    return new Error('خدمة الذكاء الاصطناعي غير متاحة حالياً في هذا النطاق، تم التحويل إلى الوضع المدمج.');
+  }
   if (lower.includes('429') || lower.includes('resource_exhausted') || lower.includes('quota')) {
     return new Error('تم تجاوز الحد المسموح لطلبات الذكاء الاصطناعي حالياً. يرجى المحاولة بعد قليل.');
   }
@@ -62,7 +74,7 @@ function parseGeminiJson<T>(rawText: string | undefined, fallbackMsg: string): T
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
     .trim();
-  if (!cleaned) {
+  if (!cleaned || cleaned.startsWith('<')) {
     throw new Error(fallbackMsg);
   }
   return JSON.parse(cleaned) as T;
@@ -81,8 +93,12 @@ export async function generateExercisesPack(params: {
     purpose = 'التواصل اليومي',
   } = params;
 
+  const ai = getAiClient();
+  if (!ai) {
+    return buildLocalExercisesPack(targetLanguage, Number(level));
+  }
+
   try {
-    const ai = getAiClient();
     const levelDesc = getLevelDescription(Number(level));
 
     const prompt = `Generate a complete interactive exercise pack STRICTLY for learning "${targetLanguage}" from "${nativeLanguage}".
@@ -204,8 +220,8 @@ Provide:
     });
 
     return parseGeminiJson<ExercisePack>(response.text, 'تعذر توليد التمارين حالياً.');
-  } catch (err) {
-    throw formatGeminiError(err, 'تعذر توليد التمارين حالياً.');
+  } catch {
+    return buildLocalExercisesPack(targetLanguage, Number(level));
   }
 }
 
@@ -236,8 +252,12 @@ export async function evaluateWritingAnswer(params: {
     throw new Error('يرجى كتابة إجابتك أولاً.');
   }
 
+  const ai = getAiClient();
+  if (!ai) {
+    return evaluateWritingLocally({ expectedAnswer, userAnswer });
+  }
+
   try {
-    const ai = getAiClient();
     const evalPrompt = `Evaluate a learner's written answer in "${targetLanguage}" (${getLevelDescription(Number(level))}).
 Prompt shown to learner (${nativeLanguage}): "${promptText}"
 Reference answer: "${expectedAnswer}"
@@ -264,8 +284,8 @@ Be encouraging and fair. Accept valid synonyms or slight punctuation differences
     });
 
     return parseGeminiJson(response.text, 'تعذر تقييم الإجابة.');
-  } catch (err) {
-    throw formatGeminiError(err, 'تعذر تقييم الإجابة.');
+  } catch {
+    return evaluateWritingLocally({ expectedAnswer, userAnswer });
   }
 }
 
@@ -298,8 +318,12 @@ export async function sendCoachChatTurn(params: {
     throw new Error('الرسالة مطلوبة.');
   }
 
+  const ai = getAiClient();
+  if (!ai) {
+    return buildLocalCoachReply({ targetLanguage, level: Number(level), message });
+  }
+
   try {
-    const ai = getAiClient();
     const levelDesc = getLevelDescription(Number(level));
     const historyText = Array.isArray(history)
       ? history
@@ -349,8 +373,8 @@ Also provide:
     });
 
     return parseGeminiJson(response.text, 'تعذر الاتصال بالمدرب الذكي.');
-  } catch (err) {
-    throw formatGeminiError(err, 'تعذر الاتصال بالمدرب الذكي.');
+  } catch {
+    return buildLocalCoachReply({ targetLanguage, level: Number(level), message });
   }
 }
 
@@ -369,8 +393,16 @@ export async function translateQuickPhrase(params: {
     throw new Error('يرجى إدخال النص للترجمة.');
   }
 
+  const ai = getAiClient();
+  if (!ai) {
+    const localMatch = translateLocallyFromCurriculum(text, targetLanguage);
+    if (localMatch) return localMatch;
+    throw new Error(
+      'للترجمة الفورية الحرة، أضف مفتاح VITE_GEMINI_API_KEY في إعدادات GitHub Secrets أو جرب كلمات المنهج الأساسية.'
+    );
+  }
+
   try {
-    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: `Translate "${text}" from "${sourceLanguage}" to "${targetLanguage}". Provide accurate translation, pronunciation guide, and one practical example sentence in "${targetLanguage}" with its translation in "${sourceLanguage}".`,
@@ -391,6 +423,8 @@ export async function translateQuickPhrase(params: {
 
     return parseGeminiJson(response.text, 'تعذر الترجمة حالياً.');
   } catch (err) {
+    const localMatch = translateLocallyFromCurriculum(text, targetLanguage);
+    if (localMatch) return localMatch;
     throw formatGeminiError(err, 'تعذر الترجمة حالياً.');
   }
 }
@@ -408,8 +442,12 @@ export async function generateInteractiveSprint(params: {
     purpose = 'التواصل اليومي',
   } = params;
 
+  const ai = getAiClient();
+  if (!ai) {
+    return buildLocalInteractiveSprint(targetLanguage, Number(level));
+  }
+
   try {
-    const ai = getAiClient();
     const levelDesc = getLevelDescription(Number(level));
 
     const prompt = `Create a 5-step interactive language sprint strictly for learning "${targetLanguage}" from "${nativeLanguage}".
@@ -468,8 +506,8 @@ Return a JSON object with a "steps" array of 5 items using these 3 interactive t
       response.text,
       'تعذر توليد الجولة التفاعلية.'
     );
-  } catch (err) {
-    throw formatGeminiError(err, 'تعذر توليد الجولة التفاعلية.');
+  } catch {
+    return buildLocalInteractiveSprint(targetLanguage, Number(level));
   }
 }
 
@@ -479,8 +517,12 @@ export async function generateLanguageAlphabet(params: {
 }): Promise<LanguageAlphabet> {
   const { nativeLanguage = 'العربية', targetLanguage = 'English' } = params;
 
+  const ai = getAiClient();
+  if (!ai) {
+    return buildLocalAlphabet(targetLanguage);
+  }
+
   try {
-    const ai = getAiClient();
     const prompt = `Generate the core alphabet or fundamental characters of "${targetLanguage}" for a beginner learner whose native language is "${nativeLanguage}".
 Provide 16 to 28 essential letters/characters of "${targetLanguage}" (in its authentic script) with:
 - letter: the character (uppercase + lowercase if applicable)
@@ -538,7 +580,7 @@ Provide 16 to 28 essential letters/characters of "${targetLanguage}" (in its aut
     });
 
     return parseGeminiJson<LanguageAlphabet>(response.text, 'تعذر تحميل حروف اللغة حالياً.');
-  } catch (err) {
-    throw formatGeminiError(err, 'تعذر تحميل حروف اللغة حالياً.');
+  } catch {
+    return buildLocalAlphabet(targetLanguage);
   }
 }

@@ -203,6 +203,11 @@ function AppContent() {
           skillVocabulary: 15,
           avatarId: safeAvatarId,
           arabicCountryCode: safeArabCode,
+          energy: 5,
+          maxEnergy: 5,
+          gems: 100,
+          lastEnergyDate: new Date().toISOString().slice(0, 10),
+          subscriptionTier: 'free',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });

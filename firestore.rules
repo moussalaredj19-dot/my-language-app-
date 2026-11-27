@@ -44,6 +44,14 @@ service cloud.firestore {
       return !('arabicCountryCode' in data) || (data.arabicCountryCode is string && data.arabicCountryCode.size() >= 2 && data.arabicCountryCode.size() <= 4);
     }
 
+    function isValidEnergyFields(data) {
+      return (!('energy' in data) || (data.energy is int && data.energy >= 0 && data.energy <= 10))
+        && (!('maxEnergy' in data) || (data.maxEnergy is int && data.maxEnergy >= 1 && data.maxEnergy <= 10))
+        && (!('gems' in data) || (data.gems is int && data.gems >= 0 && data.gems <= 1000000))
+        && (!('lastEnergyDate' in data) || (data.lastEnergyDate is string && data.lastEnergyDate.size() >= 8 && data.lastEnergyDate.size() <= 12))
+        && (!('subscriptionTier' in data) || (data.subscriptionTier is string && (data.subscriptionTier == 'free' || data.subscriptionTier == 'plus_monthly' || data.subscriptionTier == 'plus_yearly')));
+    }
+
     function isValidUserProfile(data, userId) {
       return data.keys().hasAll([
           'uid', 'displayName', 'email', 'nativeLanguage', 'targetLanguage',
@@ -64,6 +72,7 @@ service cloud.firestore {
           'notificationsEnabled', 'reminderTime',
           'skillReading', 'skillWriting', 'skillSpeaking', 'skillListening', 'skillVocabulary',
           'avatarId', 'arabicCountryCode',
+          'energy', 'maxEnergy', 'gems', 'lastEnergyDate', 'subscriptionTier',
           'createdAt', 'updatedAt'
         ])
         && data.uid is string && data.uid == userId && data.uid == request.auth.uid && isValidId(data.uid)
@@ -96,6 +105,7 @@ service cloud.firestore {
         && data.skillVocabulary is int && data.skillVocabulary >= 0 && data.skillVocabulary <= 100
         && isValidAvatarId(data)
         && isValidArabicCountryCode(data)
+        && isValidEnergyFields(data)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -363,8 +373,11 @@ service cloud.firestore {
           ]) ||
           incoming().diff(existing()).affectedKeys().hasOnly([
             'xp', 'streakDays', 'completedLessonsCount', 'completedExercisesCount',
-            'weeklyXp', 'skillReading', 'skillWriting', 'skillSpeaking',
+            'weeklyXp', 'gems', 'skillReading', 'skillWriting', 'skillSpeaking',
             'skillListening', 'skillVocabulary', 'updatedAt'
+          ]) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'energy', 'maxEnergy', 'gems', 'lastEnergyDate', 'subscriptionTier', 'updatedAt'
           ]) ||
           incoming().diff(existing()).affectedKeys().hasOnly([
             'theme', 'soundEnabled', 'speechRate', 'notificationsEnabled',
@@ -411,7 +424,7 @@ service cloud.firestore {
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'score', 'xpEarned', 'updatedAt']);
-        allow delete: if false;
+        allow delete: if isValidId(userId) && isValidId(lessonId) && isParentOwner(userId);
       }
 
       match /vocabulary/{wordId} {

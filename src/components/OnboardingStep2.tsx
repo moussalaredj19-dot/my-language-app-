@@ -7,6 +7,7 @@ import {
 } from '../data/languages';
 import { playFeedbackSound } from '../lib/sound';
 import LanguageFlag, { ARAB_COUNTRIES } from './LanguageFlag';
+import AppLogo from './AppLogo';
 import SpaceBackdrop from './SpaceBackdrop';
 
 export interface OnboardingStep2Data {
@@ -122,7 +123,7 @@ export default function OnboardingStep2({
           <span aria-hidden="true">·</span>
           <span className="text-emerald-400">اللغة والمستوى والغرض</span>
         </div>
-        <div className="w-11" aria-hidden="true" />
+        <AppLogo size="xs" />
       </header>
 
       <div className="relative z-30 w-full h-1 bg-white/10">

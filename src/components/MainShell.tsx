@@ -12,6 +12,8 @@ import {
 } from 'firebase/firestore';
 import {
   Bell,
+  Crown,
+  Gem,
   Home,
   Layers,
   MessageSquare,
@@ -21,6 +23,7 @@ import {
   Sun,
   Trophy,
   User,
+  Zap,
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { syncPublicFriendDirectory } from '../lib/friends';
@@ -34,6 +37,8 @@ import {
   VocabularyCard,
   WeeklyChallengeProgress,
 } from '../types';
+import AppLogo from './AppLogo';
+import EnergyRechargeModal from './EnergyRechargeModal';
 import LanguageFlag from './LanguageFlag';
 import UserAvatar from './UserAvatar';
 import HomeView from './views/HomeView';
@@ -57,6 +62,29 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
   const [vocabCards, setVocabCards] = useState<VocabularyCard[]>([]);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [challenges, setChallenges] = useState<WeeklyChallengeProgress[]>([]);
+  const [energyModalOpen, setEnergyModalOpen] = useState(false);
+  const [resettingStages, setResettingStages] = useState(false);
+
+  const energy = profile.energy ?? 5;
+  const maxEnergy = profile.maxEnergy ?? 5;
+  const gems = profile.gems ?? 100;
+  const subscriptionTier = profile.subscriptionTier || 'free';
+  const isPlus = subscriptionTier !== 'free';
+  const hasEnergy = isPlus || energy > 0;
+
+  // Automatic daily energy refill at local midnight/date rollover
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (profile.lastEnergyDate !== today) {
+      const userRef = doc(db, 'users', profile.uid);
+      void updateDoc(userRef, {
+        energy: 5,
+        maxEnergy: 5,
+        lastEnergyDate: today,
+        updatedAt: serverTimestamp(),
+      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`));
+    }
+  }, [profile.uid, profile.lastEnergyDate]);
 
   // Keep public friend card & lookup keys synchronized
   useEffect(() => {
@@ -157,7 +185,8 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
     skillKey: 'skillReading' | 'skillWriting' | 'skillSpeaking' | 'skillListening' | 'skillVocabulary',
     skillDelta: number,
     stageDelta = 0,
-    exerciseDelta = 0
+    exerciseDelta = 0,
+    gemsDelta = 0
   ) => {
     const userRef = doc(db, 'users', profile.uid);
     const nextSkillVal = Math.min(100, (profile[skillKey] ?? 0) + skillDelta);
@@ -167,11 +196,110 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
         weeklyXp: profile.weeklyXp + xpGain,
         completedLessonsCount: profile.completedLessonsCount + stageDelta,
         completedExercisesCount: profile.completedExercisesCount + exerciseDelta,
+        gems: gems + gemsDelta,
         [skillKey]: nextSkillVal,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+    }
+  };
+
+  const handleConsumeEnergy = async (amount = 1): Promise<boolean> => {
+    if (isPlus) return true;
+    if (energy <= 0) {
+      playFeedbackSound('error', profile.soundEnabled);
+      setEnergyModalOpen(true);
+      return false;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const nextEnergy = Math.max(0, energy - amount);
+    const userRef = doc(db, 'users', profile.uid);
+    try {
+      await updateDoc(userRef, {
+        energy: nextEnergy,
+        maxEnergy,
+        lastEnergyDate: today,
+        updatedAt: serverTimestamp(),
+      });
+      if (nextEnergy === 0) {
+        setEnergyModalOpen(true);
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+    }
+    return true;
+  };
+
+  const handleRechargeWithGems = async () => {
+    if (gems < 50) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const userRef = doc(db, 'users', profile.uid);
+    try {
+      await updateDoc(userRef, {
+        energy: 5,
+        maxEnergy: 5,
+        gems: gems - 50,
+        lastEnergyDate: today,
+        updatedAt: serverTimestamp(),
+      });
+      playFeedbackSound('levelup', profile.soundEnabled);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+    }
+  };
+
+  const handleSelectSubscription = async (nextTier: 'free' | 'plus_monthly' | 'plus_yearly') => {
+    const today = new Date().toISOString().slice(0, 10);
+    const bonus =
+      nextTier !== subscriptionTier && nextTier === 'plus_yearly'
+        ? 250
+        : nextTier !== subscriptionTier && nextTier === 'plus_monthly'
+        ? 100
+        : 0;
+    const userRef = doc(db, 'users', profile.uid);
+    try {
+      await updateDoc(userRef, {
+        subscriptionTier: nextTier,
+        energy: 5,
+        maxEnergy: 5,
+        gems: gems + bonus,
+        lastEnergyDate: today,
+        updatedAt: serverTimestamp(),
+      });
+      playFeedbackSound('levelup', profile.soundEnabled);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+    }
+  };
+
+  const handleResetLevelStages = async (scopedStageIds: string[]) => {
+    setResettingStages(true);
+    try {
+      const existingIds = scopedStageIds
+        .map((id) => id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120))
+        .filter((safeId) => Boolean(completedStages[safeId]));
+
+      await Promise.all(
+        existingIds.map((safeId) =>
+          deleteDoc(doc(db, 'users', profile.uid, 'lessonProgress', safeId)).catch((err) =>
+            handleFirestoreError(err, OperationType.DELETE, `users/${profile.uid}/lessonProgress/${safeId}`)
+          )
+        )
+      );
+
+      if (existingIds.length > 0) {
+        const userRef = doc(db, 'users', profile.uid);
+        await updateDoc(userRef, {
+          completedLessonsCount: Math.max(0, profile.completedLessonsCount - existingIds.length),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      playFeedbackSound('tap', profile.soundEnabled);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+    } finally {
+      setResettingStages(false);
     }
   };
 
@@ -201,7 +329,7 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        await awardProgress(stage.xpReward, 'skillReading', 6, 1, 0);
+        await awardProgress(stage.xpReward, 'skillReading', 6, 1, 0, 10);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${profile.uid}/lessonProgress/${safeId}`);
@@ -379,26 +507,29 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col lg:flex-row transition-colors duration-200">
       {/* Desktop Navigation Rail */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sticky top-0 h-[100dvh]">
-        <div className="px-2 py-2 mb-4 flex items-center gap-3">
-          <UserAvatar
-            uid={profile.uid}
-            displayName={profile.displayName}
-            avatarId={profile.avatarId}
-            size="sm"
-          />
-          <div className="min-w-0 flex-1">
-            <div dir="ltr" className="font-display text-lg font-extrabold text-[#081B3E] dark:text-emerald-400 truncate">
-              My Language
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-              <LanguageFlag
-                language={profile.targetLanguage}
-                arabicCountryCode={profile.arabicCountryCode}
-                size="xs"
-              />
-              <span className="truncate">
-                {profile.targetLanguage} · المستوى {profile.level}
-              </span>
+        <div className="px-2 py-2 mb-4 space-y-3">
+          <AppLogo size="xs" showText />
+          <div className="flex items-center gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <UserAvatar
+              uid={profile.uid}
+              displayName={profile.displayName}
+              avatarId={profile.avatarId}
+              size="sm"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {profile.displayName}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                <LanguageFlag
+                  language={profile.targetLanguage}
+                  arabicCountryCode={profile.arabicCountryCode}
+                  size="xs"
+                />
+                <span className="truncate">
+                  {profile.targetLanguage} · م{profile.level}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -455,10 +586,16 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
             <button
               type="button"
               onClick={() => setActiveTab('home')}
-              dir="ltr"
-              className="font-display text-sm sm:text-base font-extrabold text-[#081B3E] dark:text-emerald-400 whitespace-nowrap shrink-0 cursor-pointer"
+              className="flex items-center gap-2 cursor-pointer shrink-0"
+              aria-label="الرئيسية"
             >
-              My Language
+              <AppLogo size="xs" />
+              <span
+                dir="ltr"
+                className="font-display text-sm sm:text-base font-extrabold text-[#081B3E] dark:text-emerald-400 whitespace-nowrap hidden sm:inline"
+              >
+                My Language
+              </span>
             </button>
 
             {/* Active Language National Flag Badge in Top Bar */}
@@ -480,6 +617,27 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {/* Energy & Subscription Trigger */}
+            <button
+              type="button"
+              onClick={() => setEnergyModalOpen(true)}
+              className={`min-h-[36px] px-2.5 rounded-xl border text-xs font-mono-num font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                isPlus
+                  ? 'border-amber-400/70 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                  : energy === 0
+                  ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 animate-pulse'
+                  : 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+              }`}
+              title="الطاقة والاشتراكات"
+            >
+              {isPlus ? <Crown className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>{isPlus ? '∞' : `${energy}/${maxEnergy}`}</span>
+              <span className="hidden sm:inline-flex items-center gap-0.5 text-sky-600 dark:text-sky-300 border-r border-slate-300 dark:border-slate-700 pr-1.5 mr-0.5">
+                <Gem className="w-3 h-3" />
+                <span>{gems}</span>
+              </span>
+            </button>
+
             {/* Instant 1-Tap Light / Dark Mode Switcher */}
             <button
               type="button"
@@ -529,6 +687,7 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
               profile={profile}
               unreadNotifications={unreadCount}
               onNavigate={setActiveTab}
+              onOpenRecharge={() => setEnergyModalOpen(true)}
             />
           )}
 
@@ -536,6 +695,15 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
             <ExercisesView
               profile={profile}
               completedStages={completedStages}
+              hasEnergy={hasEnergy}
+              energy={energy}
+              maxEnergy={maxEnergy}
+              gems={gems}
+              isPlus={isPlus}
+              resettingStages={resettingStages}
+              onConsumeEnergy={handleConsumeEnergy}
+              onOpenRecharge={() => setEnergyModalOpen(true)}
+              onResetStages={handleResetLevelStages}
               onCompleteStage={handleCompleteStage}
               onExerciseCompleted={async (skill, xp) => {
                 const keyMap = {
@@ -629,6 +797,14 @@ export default function MainShell({ profile, onThemeSync, onSignOut }: MainShell
           );
         })}
       </nav>
+
+      <EnergyRechargeModal
+        open={energyModalOpen}
+        profile={profile}
+        onClose={() => setEnergyModalOpen(false)}
+        onRechargeWithGems={handleRechargeWithGems}
+        onSelectSubscription={handleSelectSubscription}
+      />
     </div>
   );
 }

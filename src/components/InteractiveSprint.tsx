@@ -19,12 +19,18 @@ import TalkingAvatar from './TalkingAvatar';
 interface InteractiveSprintProps {
   profile: UserProfile;
   stageTitle?: string;
+  hasEnergy?: boolean;
+  onConsumeEnergy?: (amount?: number) => Promise<boolean>;
+  onOpenRecharge?: () => void;
   onCompleteSprint: (xpEarned: number) => Promise<void>;
 }
 
 export default function InteractiveSprint({
   profile,
   stageTitle,
+  hasEnergy = true,
+  onConsumeEnergy,
+  onOpenRecharge,
   onCompleteSprint,
 }: InteractiveSprintProps) {
   const [steps, setSteps] = useState<InteractiveSprintStep[]>(
@@ -102,6 +108,10 @@ export default function InteractiveSprint({
 
   const handleCheck = () => {
     if (!current || checkedState !== 'idle') return;
+    if (!hasEnergy) {
+      onOpenRecharge?.();
+      return;
+    }
     let isRight = false;
 
     if (current.type === 'arrange') {
@@ -134,6 +144,7 @@ export default function InteractiveSprint({
       setHearts((h) => Math.max(0, h - 1));
       setCheckedState('wrong');
       playFeedbackSound('error', profile.soundEnabled);
+      void onConsumeEnergy?.(1);
     }
   };
 
@@ -250,6 +261,15 @@ export default function InteractiveSprint({
           </span>
           <button
             type="button"
+            onClick={() => resetWithSteps(steps)}
+            className="min-h-[36px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1 cursor-pointer"
+            title="إعادة الجولة من البداية"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>إعادة</span>
+          </button>
+          <button
+            type="button"
             onClick={() => void handleGenerateAiSprint()}
             disabled={generating}
             className="min-h-[36px] px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
@@ -259,6 +279,21 @@ export default function InteractiveSprint({
           </button>
         </div>
       </div>
+
+      {!hasEnergy && (
+        <div className="px-5 py-3 bg-rose-50 dark:bg-rose-950/50 border-b border-rose-200 dark:border-rose-900 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-rose-700 dark:text-rose-200">
+            نفدت طاقتك! اشحن طاقتك بالجواهر أو بالاشتراك أو انتظر حتى الغد للمتابعة.
+          </span>
+          <button
+            type="button"
+            onClick={() => onOpenRecharge?.()}
+            className="min-h-[34px] px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+          >
+            شحن الطاقة الآن
+          </button>
+        </div>
+      )}
 
       {genError && (
         <div className="px-5 py-2.5 bg-rose-50 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-200 border-b border-rose-200 dark:border-rose-900">

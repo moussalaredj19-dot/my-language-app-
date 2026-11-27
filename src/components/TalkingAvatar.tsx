@@ -10,6 +10,7 @@ interface TalkingAvatarProps {
   subtitle?: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'emerald' | 'sky' | 'violet';
+  mood?: 'neutral' | 'celebrate' | 'encourage';
   showControls?: boolean;
   forceSpeaking?: boolean;
 }
@@ -22,6 +23,7 @@ export default function TalkingAvatar({
   subtitle,
   size = 'md',
   variant = 'emerald',
+  mood = 'neutral',
   showControls = false,
   forceSpeaking = false,
 }: TalkingAvatarProps) {
@@ -90,6 +92,28 @@ export default function TalkingAvatar({
   }[variant];
 
   const renderMouth = () => {
+    if (!isTalking && mood === 'celebrate') {
+      return (
+        <path
+          d="M 41 59 Q 50 68 59 59 Z"
+          fill="#881337"
+          stroke="#7C2D12"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      );
+    }
+    if (!isTalking && mood === 'encourage') {
+      return (
+        <path
+          d="M 43 62 Q 50 60 57 62"
+          fill="none"
+          stroke="#7C2D12"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+        />
+      );
+    }
     if (!isTalking || mouthStep === 0) {
       return (
         <path
